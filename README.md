@@ -2,6 +2,8 @@
 
 **Live Demo:** [https://pub-52ee07814bfa467bad60b77c80d53dd3.r2.dev/index.html](https://pub-52ee07814bfa467bad60b77c80d53dd3.r2.dev/index.html)
 
+![alt text](image.png) 
+
 An interactive map visualizing real estate price estimates from the French DVF (Demandes de Valeurs Foncières) database, covering transactions from 2020 to June 2025. The map displays median price per square meter aggregated at six geographic levels, with property type filtering (All, Apartments, Houses).
 
 ---
