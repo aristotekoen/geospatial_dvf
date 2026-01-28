@@ -480,7 +480,7 @@ The adjustment factor for a transaction is the ratio between:
 
 The adjusted price is then computed as:
 
-$$\text{adjusted price} = \text{price per m}^2 \times \frac{\text{median}_{(\text{dept}, \text{type}, 2025)}}{\text{median}_{(\text{dept}, \text{type}, \text{transaction year})}}$$
+$$\text{adjusted price} = \text{price per m}_2 \times \frac{\text{median}_{(\text{dept}, \text{type}, 2025)}}{\text{median}_{(\text{dept}, \text{type}, \text{transaction year})}}$$
 
 
 ### Implementation
