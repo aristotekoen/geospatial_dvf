@@ -657,20 +657,22 @@ Files uploaded:
 
 ## Conclusion: Considerations and limitations
 
-In conclusion we obtain an interactive map zooming at 6 levels of granularity displaying an estimate of market prices within each administrative boundary via the median price per square meter within the boundary and per property type. We also have the time adjusted median price per square meter in order to take into account data freshness. The use of pmtiles help our map to not slow down at higher zoom levels.
+In conclusion we obtain an interactive map zooming at 6 levels of granularity, displaying an estimate of market prices within each administrative boundary via the median price per square meter within the boundary and per property type. 
+
+We also show the time adjusted median price per square meter in order to take into account data freshness. The use of pmtiles help our map to not slow down at higher zoom levels.
 
 Some considerations:
 
 - The DVF do not contain Alsace-Moselle that is why we do not see these regions on the map 
-- We display the IRIS regions instead of postcodes as the postcodes would become redundant with communes. In fact, they can contain multiple communes while certain communes can contain multiple postcodes making it neither a finer nor a broader level 
-- At the parcel level we do not apply the threshold of a minimum of 5 transactions to color the parcel as we do it for lower levels otherwise most of the parcels would be gray. 
+- We display the IRIS neighborhoods instead of postcodes as the postcodes would become redundant with communes. In fact, postcodes can contain multiple communes while certain communes can contain multiple postcodes making it neither a finer nor a broader level.
+- At the parcel level we do not apply the threshold of a minimum of 5 transactions to color the parcel (as it is done for lower zoom levels) otherwise most of the parcels would be gray. 
 
 In order to improve this map could:
 
-- For each administrative boundary we could make a dynamic color scale based on the price range of the higher level administrative boundaries within it. 
+- For each administrative boundary, make a dynamic color scale based on the price range of the higher level administrative boundaries within it. 
 - Improve the outlier removal mechanism by suppressing outliers on groups taking transaction year and property type into account in order to consider even more homogeneous groups of properties. 
 - Enrich the data with DVF from years 2014 - 2020 using previous millesimes
-- Fit a linear regression over the price vs timestamp to extract a trend per administrative boundary to adjust the price to 2025 levels instead of using the method described above.
+- Fit a linear regression over the price vs timestamp to extract a trend per administrative boundary to adjust the price to 2025 levels instead of using the method we described before.
 - Add CI/CD pipelines for automated testing
 - Improve code clarity by breaking down some large functions (for parcel generation for example)
 - We could compute an uncertainty score instead of using the <5 transactions warning message.  
