@@ -148,10 +148,7 @@ def aggregate_iris(start_date: date | None = None) -> pl.DataFrame:
 
 
 def aggregate_parcel(start_date: date | None = None) -> pl.DataFrame:
-    """Aggregate at parcel (building plot) level.
-    
-    Includes department code for joining with cadastre geometries.
-    """
+    """Aggregate at parcel (building plot) level."""
     result = (
         get_filtered_scan(start_date)
         .group_by(["id_parcelle_unique"])

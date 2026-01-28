@@ -99,7 +99,7 @@ def process_commune_simple(args: tuple) -> tuple[str, int, str]:
         # Simplify geometries for smaller files
         result["geometry"] = result["geometry"].simplify(0.00001, preserve_topology=True)
         
-        # Round floats
+        # Round floats to reduce size
         float_cols = result.select_dtypes(include=["float64"]).columns
         for col in float_cols:
             if col not in ["longitude", "latitude"]:
@@ -161,10 +161,10 @@ def generate_parcel_geojson(time_span: str = TIME_SPAN, num_workers: int = NUM_W
         logger.error("No cadastre files found. Run download first.")
         return []
     
-    # Group files by department (grandparent directory name: parcelles/DEPT/commune/file.gz)
+    # Group files by department
     files_by_dept = {}
     for f in all_parcel_files:
-        dept = f.parent.parent.name  # Department code is the grandparent folder name
+        dept = f.parent.parent.name  
         if dept not in files_by_dept:
             files_by_dept[dept] = []
         files_by_dept[dept].append(f)
@@ -260,11 +260,10 @@ def convert_to_pmtiles(geojson_files: list[Path], min_zoom: int = 13, max_zoom: 
     # Intermediate MBTiles file
     mbtiles_output = PMTILES_OUTPUT.with_suffix(".mbtiles")
     
-    # Calculate input size
     total_input_size = sum(f.stat().st_size for f in geojson_files) / (1024 * 1024)
     logger.info(f"Input: {len(geojson_files):,} GeoJSON files ({total_input_size:.1f} MB)")
     
-    # Step 2a: Run tippecanoe to create MBTiles
+
     logger.info("Step 2a: Running tippecanoe → MBTiles...")
     cmd = [
         "tippecanoe",
@@ -302,7 +301,7 @@ def convert_to_pmtiles(geojson_files: list[Path], min_zoom: int = 13, max_zoom: 
         logger.error(f"tippecanoe failed: {e}")
         return False
     
-    # Step 2b: Convert MBTiles to PMTiles
+
     logger.info("Step 2b: Converting MBTiles → PMTiles...")
     try:
         result = subprocess.run(
@@ -327,7 +326,7 @@ def convert_to_pmtiles(geojson_files: list[Path], min_zoom: int = 13, max_zoom: 
         logger.info(f"Output: {PMTILES_OUTPUT.name} ({pmtiles_size:.1f} MB)")
         logger.info(f"Compression ratio: {compression_ratio:.1f}x")
         
-        # Clean up intermediate MBTiles
+
         mbtiles_output.unlink()
         logger.info("Cleaned up intermediate MBTiles")
         

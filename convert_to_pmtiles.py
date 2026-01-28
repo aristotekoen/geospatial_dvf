@@ -33,7 +33,7 @@ PMTILES_CONFIG = {
         "archive": PROCESSED_DIR / "joined_communes",
         "layer": "communes",
         "min_zoom": 9,
-        "max_zoom": 14,  # Communes visible at zoom 9-11, but include extra for smooth transitions
+        "max_zoom": 14,  
     },
     "iris": {
         "input": MAP_DATA_DIR / "iris.geojson",
@@ -41,7 +41,7 @@ PMTILES_CONFIG = {
         "archive": PROCESSED_DIR / "joined_iris",
         "layer": "iris",
         "min_zoom": 11,
-        "max_zoom": 16,  # IRIS visible at zoom 11-13, include extra for smooth transitions
+        "max_zoom": 16, 
     },
 }
 
@@ -63,11 +63,8 @@ def convert_geojson_to_pmtiles(
     min_zoom: int,
     max_zoom: int,
 ) -> bool:
-    """Convert a GeoJSON file to PMTiles.
-    
+    """Convert a GeoJSON file to PMTiles. 
     Uses tippecanoe to create MBTiles, then pmtiles CLI to convert.
-    
-    Returns True if successful.
     """
     if not input_path.exists():
         logger.error(f"Input file not found: {input_path}")
@@ -175,7 +172,6 @@ def main():
     logger.info("Convert GeoJSON to PMTiles")
     logger.info("=" * 60)
     
-    # Check dependencies
     if not check_tippecanoe():
         logger.error("tippecanoe not found!")
         logger.error("Install with: sudo apt install tippecanoe")
@@ -196,7 +192,6 @@ def main():
         logger.info(f"Processing: {name}")
         logger.info("=" * 60)
         
-        # Convert to PMTiles
         if convert_geojson_to_pmtiles(
             input_path=config["input"],
             output_path=config["output"],
@@ -204,13 +199,13 @@ def main():
             min_zoom=config["min_zoom"],
             max_zoom=config["max_zoom"],
         ):
-            # Archive original GeoJSON
+            
             archive_geojson(config["input"], config["archive"])
             success_count += 1
         else:
             logger.error(f"Failed to convert {name}")
     
-    # Summary
+    
     logger.info("=" * 60)
     logger.info("Summary")
     logger.info("=" * 60)

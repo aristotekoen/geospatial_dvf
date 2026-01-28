@@ -348,7 +348,7 @@ Output: `map/data/communes.pmtiles`, `map/data/iris.pmtiles`
 Starts a local development server:
 
 - Serves the `map/` directory via FastAPI + Uvicorn
-- Available at `http://localhost:8765`
+- Available at `http://localhost:8080`
 
 ---
 
