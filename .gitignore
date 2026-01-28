@@ -17,6 +17,7 @@ archive/
 
 # Data files
 *.csv
+!tests/fixtures/*.csv
 *.parquet
 *.geojson
 *.gz
