@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>DVF - Real Estate Prices in France</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/pmtiles@2.11.0/dist/index.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        /* Glassmorphism style for overlays */
+        .map-overlay {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 12px 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        /* Left side stack - F-pattern layout */
+        #controls {
+            top: 10px;
+            left: 10px;
+            min-width: 180px;
+        }
+        
+        #controls strong {
+            font-size: 12px;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        #controls select {
+            width: 100%;
+            padding: 8px 10px;
+            margin-top: 8px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            background: white;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        
+        #controls select:hover {
+            border-color: #0066cc;
+        }
+        
+        #info {
+            top: 100px;
+            left: 10px;
+            min-width: 230px;
+            max-width: 250px;
+        }
+        
+        #info h3 {
+            margin: 0 0 10px 0;
+            font-size: 15px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        #info .stat {
+            margin: 5px 0;
+            color: #666;
+        }
+        
+        #info .stat strong {
+            color: #222;
+        }
+        
+        #top-cities {
+            top: 290px;
+            left: 10px;
+            width: 230px;
+            max-height: calc(100vh - 350px);
+            overflow-y: auto;
+            display: none;
+        }
+        
+        #top-cities h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #333;
+        }
+        
+        #top-cities h4:hover {
+            color: #0066cc;
+        }
+        
+        #top-cities .toggle-icon {
+            font-size: 10px;
+            transition: transform 0.2s;
+            color: #666;
+        }
+        
+        #top-cities.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+        
+        #top-cities.collapsed #top-cities-list {
+            display: none;
+        }
+        
+        #top-cities .city-name {
+            font-weight: 600;
+            color: #333;
+            font-size: 12px;
+        }
+        
+        #top-cities .city-stats {
+            color: #888;
+            font-size: 10px;
+            margin-bottom: 6px;
+        }
+        
+        #top-cities .city-price {
+            font-weight: 700;
+            color: #0066cc;
+            font-size: 13px;
+        }
+        
+        /* Custom scrollbar for top cities */
+        #top-cities::-webkit-scrollbar {
+            width: 5px;
+        }
+        
+        #top-cities::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        #top-cities::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 3px;
+        }
+        
+        /* Legend - bottom center, horizontal */
+        #legend {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        
+        #legend h4 {
+            margin: 0;
+            font-size: 12px;
+            white-space: nowrap;
+            color: #555;
+            line-height: 12px;
+        }
+        
+        .legend-scale-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .legend-scale {
+            display: flex;
+            height: 12px;
+            width: 200px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .legend-scale div {
+            flex: 1;
+        }
+        
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            width: 200px;
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .legend-extra {
+            display: flex;
+            gap: 12px;
+            font-size: 10px;
+            color: #666;
+            line-height: 12px;
+        }
+        
+        .legend-extra span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .legend-extra .swatch {
+            width: 12px;
+            height: 10px;
+            border-radius: 2px;
+        }
+        
+        #current-level {
+            font-size: 11px;
+            color: #888;
+            white-space: nowrap;
+        }
+        
+        /* Zoom level indicator - bottom right */
+        #zoom-level {
+            position: absolute;
+            bottom: 100px;
+            right: 10px;
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(10px);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #666;
+        }
+        
+        /* Move MapLibre controls to bottom right */
+        .maplibregl-ctrl-top-right {
+            top: auto !important;
+            bottom: 120px !important;
+            right: 10px !important;
+        }
+        
+        /* Mobile layout adjustments */
+        @media (max-width: 600px) {
+            .map-overlay {
+                padding: 8px 10px;
+            }
+            
+            #controls {
+                top: 10px;
+                left: 10px;
+                min-width: auto;
+            }
+            
+            #info {
+                top: 80px;
+                left: 10px;
+                min-width: 210px;
+                max-width: 240px;
+            }
+            
+            #info h3 {
+                font-size: 13px;
+                margin: 0 0 6px 0;
+            }
+            
+            #info .stat {
+                font-size: 11px;
+                margin: 3px 0;
+            }
+            
+            #top-cities {
+                top: auto;
+                bottom: 110px;
+                left: 10px;
+                width: 200px;
+                max-height: 200px;
+                display: flex;
+                flex-direction: column-reverse;
+            }
+            
+            #top-cities h4 {
+                margin: 0;
+                font-size: 12px;
+                padding-top: 8px;
+            }
+            
+            #top-cities.collapsed {
+                height: 30px;
+                overflow: hidden;
+            }
+            
+            #top-cities #top-cities-list {
+                display: block !important;
+                margin-bottom: 8px;
+            }
+
+            #top-cities.collapsed #top-cities-list {
+                 display: none !important;
+            }
+
+            #top-cities .toggle-icon {
+                transform: rotate(180deg);
+            }
+            
+            #top-cities.collapsed .toggle-icon {
+                transform: rotate(0deg);
+            }
+            
+            #legend {
+                bottom: 40px;
+                left: 10px;
+                right: 10px;
+                transform: none;
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 5px;
+                padding: 6px 10px;
+                justify-content: space-between;
+            }
+            
+            #legend h4 {
+                width: 100%;
+                margin: 0 0 4px 0;
+                font-size: 11px;
+            }
+            
+            .legend-scale-wrapper {
+                 flex: 1;
+                 min-width: 0;
+            }
+            
+            .legend-scale {
+                width: 100%;
+            }
+            
+            .legend-labels {
+                width: 100%;
+                font-size: 9px;
+            }
+            
+            .legend-extra {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                width: auto;
+                margin-top: 0;
+                padding-left: 6px;
+                border-left: 1px solid rgba(0,0,0,0.1);
+                font-size: 8px;
+                flex-shrink: 0;
+            }
+            
+            #current-level {
+                display: none;
+            }
+            
+            #zoom-level {
+                display: none;
+            }
+            
+            .maplibregl-ctrl-top-right {
+                bottom: 120px !important;
+            }
+        }
+        
+        #top-cities ol {
+            margin: 0;
+            padding-left: 18px;
+        }
+        
+        #top-cities li {
+            margin: 6px 0;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="map-overlay" id="info">
+        <h3>Real Estate Prices</h3>
+        <div id="hover-info">
+            <p style="color: #999;">Hover over an area to see prices</p>
+        </div>
+    </div>
+    
+    <div class="map-overlay" id="legend">
+        <h4>Median €/m²</h4>
+        <div class="legend-scale-wrapper">
+            <div class="legend-scale" id="legend-scale"></div>
+            <div class="legend-labels" id="legend-labels">
+                <span>1,500</span>
+                <span>3,500</span>
+                <span>8,000+</span>
+            </div>
+        </div>
+        <div class="legend-extra">
+            <span><span class="swatch" style="background: #999999;"></span>No data</span>
+            <span><span class="swatch" style="background: #cccccc;"></span>&lt;5 transactions</span>
+        </div>
+        <div id="current-level">Level: Country</div>
+    </div>
+    
+    <div class="map-overlay" id="controls">
+        <strong>Property Type</strong>
+        <select id="property-type">
+            <option value="all">All Types</option>
+            <option value="maison">Houses</option>
+            <option value="appartement">Apartments</option>
+        </select>
+    </div>
+    
+    <div id="zoom-level">Zoom: <span id="zoom-value">1</span></div>
+    
+    <div class="map-overlay" id="top-cities">
+        <h4 onclick="toggleTopCities()">🏆 Top 10 Cities <span class="toggle-icon">▼</span></h4>
+        <div id="top-cities-list"></div>
+    </div>
+
+    <script>
+        console.log('Script starting...');
+        console.log('pmtiles defined?', typeof pmtiles !== 'undefined');
+        console.log('maplibregl defined?', typeof maplibregl !== 'undefined');
+        
+        // PMTiles protocol registration
+        let pmtilesAvailable = false;
+        try {
+            if (typeof pmtiles !== 'undefined' && typeof maplibregl !== 'undefined') {
+                const protocol = new pmtiles.Protocol();
+                maplibregl.addProtocol("pmtiles", protocol.tile);
+                pmtilesAvailable = true;
+                console.log('PMTiles protocol registered successfully');
+            } else {
+                console.log('PMTiles or MapLibre library not loaded');
+            }
+        } catch (e) {
+            console.error('PMTiles registration error:', e);
+        }
+        
+        // Color palette (green to yellow to red)
+        const colors = ['#1a9850', '#a6d96a', '#ffdd00', '#f46d43', '#d73027'];
+        
+        // Will be populated with actual min/max from data
+        const priceScales = {
+            country: null,
+            regions: null,
+            departments: null,
+            iris: null,
+            communes: null,
+            parcels: null
+        };
+        
+        // Store loaded GeoJSON data
+        const geoData = {};
+        
+        // Compute price scale from GeoJSON features with 5 stops
+        function computePriceScale(features, priceField, level = 'default') {
+            // Fixed scale from 1500 to 8000 €/m² for all levels
+            return [1500, 3125, 4750, 6375, 8000];
+        }
+        
+        // Build legend gradient (static colors)
+        const legendScale = document.getElementById('legend-scale');
+        colors.forEach(color => {
+            const div = document.createElement('div');
+            div.style.backgroundColor = color;
+            legendScale.appendChild(div);
+        });
+        
+        // Initialize map (MapLibre with free Carto basemap)
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+            center: [2.3, 46.5],  // Center of France
+            zoom: 4,
+            minZoom: 3,
+            maxZoom: 18
+        });
+        
+        // Current property type filter
+        let currentPropertyType = 'all';
+        let currentLevel = 'country';
+        let topCitiesData = [];  // Pre-aggregated top cities data
+        
+        function updateTopCitiesPanel() {
+            const countField = getCountField();
+            const priceField = getPriceField();
+            
+            // Data is already aggregated (Paris, Lyon, Marseille combined)
+            // Just sort by the appropriate count field
+            const sorted = topCitiesData
+                .map(city => ({
+                    name: city.name,
+                    count: city[countField] || 0,
+                    price: city[priceField] || null
+                }))
+                .filter(c => c.count > 0)
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 10);
+            
+            const listHtml = sorted.map((c, i) => {
+                const priceStr = c.price ? Math.round(c.price).toLocaleString('en-US') + ' €/m²' : 'N/A';
+                return `<div style="margin: 8px 0; display: flex; justify-content: space-between; align-items: baseline;">
+                    <span class="city-name">${i+1}. ${c.name}</span>
+                    <span class="city-price">${priceStr}</span>
+                </div>
+                <div class="city-stats">${c.count.toLocaleString('en-US')} transactions</div>`;
+            }).join('');
+            
+            document.getElementById('top-cities-list').innerHTML = listHtml;
+        }
+        
+        function showTopCities(show) {
+            document.getElementById('top-cities').style.display = show ? 'block' : 'none';
+        }
+        
+        function toggleTopCities() {
+            document.getElementById('top-cities').classList.toggle('collapsed');
+        }
+        
+        function getPriceField() {
+            switch(currentPropertyType) {
+                case 'maison': return 'prix_m2_maison_median';
+                case 'appartement': return 'prix_m2_appart_median';
+                default: return 'prix_m2_median';
+            }
+        }
+        
+        function getAdjustedPriceField() {
+            switch(currentPropertyType) {
+                case 'maison': return 'prix_m2_ajuste_maison_median';
+                case 'appartement': return 'prix_m2_ajuste_appart_median';
+                default: return 'prix_m2_ajuste_median';
+            }
+        }
+        
+        function getCountField() {
+            switch(currentPropertyType) {
+                case 'maison': return 'nb_maisons';
+                case 'appartement': return 'nb_appartements';
+                default: return 'nb_transactions';
+            }
+        }
+        
+        // Format price for display
+        function formatPrice(price) {
+            if (price === null || price === undefined) return 'N/A';
+            return Math.round(price).toLocaleString('en-US') + ' €/m²';
+        }
+        
+        function formatCount(count) {
+            if (count === null || count === undefined) return 'N/A';
+            return count.toLocaleString('en-US');
+        }
+        
+        // Update hover info panel
+        function updateInfo(properties, level) {
+            const priceField = getPriceField();
+            const adjustedPriceField = getAdjustedPriceField();
+            const countField = getCountField();
+            
+            let name = '';
+            if (level === 'country') {
+                name = properties.name || 'France';
+            } else if (level === 'regions') {
+                name = properties.nom_region || properties.nom_region_geo || 'Région';
+            } else if (level === 'departments') {
+                name = properties.nom_departement || 'Département';
+            } else if (level === 'iris') {
+                const irisName = properties.nom_iris || '';
+                const communeName = properties.nom_commune_iris || '';
+                const irisCode = properties.code_iris || '';
+                // If IRIS name equals commune name, show code for distinction
+                if (irisName === communeName && irisCode) {
+                    name = `IRIS ${irisCode} (${communeName})`;
+                } else if (irisName) {
+                    name = communeName && irisName !== communeName ? `${irisName} (${communeName})` : irisName;
+                } else {
+                    name = irisCode ? `IRIS ${irisCode}` : 'IRIS';
+                }
+            } else if (level === 'communes') {
+                name = properties.nom_commune || properties.nom_commune_geo || 'Commune';
+            } else if (level === 'parcels') {
+                const parcelId = properties.id_parcelle_unique || properties.id || '';
+                const commune = properties.nom_commune || '';
+                name = commune ? `Parcelle ${parcelId} (${commune})` : `Parcelle ${parcelId}`;
+            }
+            
+            const price = properties[priceField];
+            const priceMean = properties[priceField.replace('median', 'mean')];
+            const priceAdjusted = properties[adjustedPriceField];
+            const count = properties[countField];
+            const priceQ25 = properties[priceField.replace('median', 'q25')];
+            const priceQ75 = properties[priceField.replace('median', 'q75')];
+            
+            const noData = (count || 0) === 0;
+            const insufficientData = (count || 0) > 0 && (count || 0) < 5;
+            
+            let dataNote = '';
+            if (noData) {
+                dataNote = '<div class="stat" style="color: #888; font-style: italic;">⛔ No transactions</div>';
+            } else if (insufficientData) {
+                dataNote = '<div class="stat" style="color: #999; font-style: italic;">⚠️ Insufficient data (&lt;5 transactions)</div>';
+            }
+            
+            document.getElementById('hover-info').innerHTML = `
+                <div class="stat"><strong>${name}</strong></div>
+                ${dataNote}
+                <div class="stat">Median price: <strong>${noData ? 'N/A' : formatPrice(price)}</strong></div>
+                <div class="stat">Average price: ${noData ? 'N/A' : formatPrice(priceMean)}</div>
+                <div class="stat">Range: ${noData ? 'N/A' : formatPrice(priceQ25) + ' - ' + formatPrice(priceQ75)}</div>
+                <div class="stat">Time adjusted price: ${noData ? 'N/A' : formatPrice(priceAdjusted)}</strong></div>
+                <div class="stat">Transactions: <strong>${formatCount(count)}</strong></div>
+            `;
+        }
+        
+        function resetInfo() {
+            document.getElementById('hover-info').innerHTML = 
+                '<p style="color: #999;">Hover over an area to see prices</p>';
+        }
+        
+        // Build fill-color expression for a layer with specific scale
+        // Shows darker gray for no data, lighter gray for <5 transactions (except parcels)
+        function buildFillColor(level) {
+            const priceField = getPriceField();
+            const countField = getCountField();
+            // Default scale if not computed yet (parcels use communes scale as fallback)
+            const defaultScale = [1500, 3125, 4750, 6375, 8000];
+            const scale = priceScales[level] || priceScales['communes'] || defaultScale;
+            
+            // Build interpolation stops: [price1, color1, price2, color2, ...]
+            const stops = [];
+            for (let i = 0; i < scale.length; i++) {
+                stops.push(scale[i], colors[i]);
+            }
+            
+            // For parcels: 0 transactions -> dark gray, otherwise color scale
+            if (level === 'parcels') {
+                return [
+                    'case',
+                    ['==', ['coalesce', ['get', countField], 0], 0],
+                    '#999999',
+                    [
+                        'interpolate',
+                        ['linear'],
+                        ['coalesce', ['get', priceField], 0],
+                        ...stops
+                    ]
+                ];
+            }
+            
+            // For other levels: 0 transactions -> dark gray, <5 -> light gray, else color
+            return [
+                'case',
+                ['==', ['coalesce', ['get', countField], 0], 0],
+                '#999999',  // Dark gray for no transactions
+                ['<', ['coalesce', ['get', countField], 0], 5],
+                '#cccccc',  // Light gray for insufficient data
+                [
+                    'interpolate',
+                    ['linear'],
+                    ['coalesce', ['get', priceField], 0],
+                    ...stops
+                ]
+            ];
+        }
+        
+        // Update legend labels based on current level
+        function updateLegend(level) {
+            const scale = priceScales[level] || [1500, 3125, 4750, 6375, 8000];
+            const labels = document.getElementById('legend-labels');
+            const levelNames = {
+                country: 'Country', 
+                regions: 'Regions', 
+                departments: 'Departments', 
+                communes: 'Communes',
+                iris: 'IRIS Zones', 
+                parcels: 'Parcels'
+            };
+            
+            // Format number for legend (k for thousands)
+            const fmt = (n) => n >= 1000 ? `${(n/1000).toFixed(1)}k` : n.toString();
+            
+            // Update labels (show all 5 values)
+            labels.innerHTML = `
+                <span>${fmt(scale[0])}</span>
+                <span>${fmt(scale[1])}</span>
+                <span>${fmt(scale[2])}</span>
+                <span>${fmt(scale[3])}</span>
+                <span>${fmt(scale[4])}</span>
+            `;
+            
+            document.getElementById('current-level').textContent = `Level: ${levelNames[level]}`;
+        }
+        
+        // Update scales and colors when property type changes
+        function updateScalesAndColors() {
+            const priceField = getPriceField();
+            
+            // Recompute scales for GeoJSON levels based on current property type
+            ['country', 'regions', 'departments'].forEach(level => {
+                if (geoData[level]) {
+                    priceScales[level] = computePriceScale(geoData[level].features, priceField, level);
+                }
+            });
+            // PMTiles levels use fixed scale
+            priceScales['communes'] = [1500, 3125, 4750, 6375, 8000];
+            priceScales['iris'] = [1500, 3125, 4750, 6375, 8000];
+            priceScales['parcels'] = [1500, 3125, 4750, 6375, 8000];
+            
+            // Update all layer colors (both GeoJSON and PMTiles)
+            ['country', 'regions', 'departments', 'communes', 'iris', 'parcels'].forEach(level => {
+                const layerId = `${level}-fill`;
+                if (map.getLayer(layerId)) {
+                    map.setPaintProperty(layerId, 'fill-color', buildFillColor(level));
+                }
+            });
+            
+            // Update legend
+            updateLegend(currentLevel);
+        }
+        
+        // Update all layer colors when property type changes
+        function updateLayerColors() {
+            updateScalesAndColors();
+        }
+        
+        // Determine current level based on zoom
+        function getLevelFromZoom(zoom) {
+            if (zoom < 5) return 'country';
+            if (zoom < 7) return 'regions';
+            if (zoom < 9) return 'departments';
+            if (zoom < 11) return 'communes';
+            if (zoom < 13) return 'iris';
+            return 'parcels';
+        }
+        
+        // Base URL for data (relative path - served from same origin as index.html)
+        const DATA_BASE_URL = 'data';
+        
+        // Layer configuration: zoom ranges and styles
+        const layerConfig = {
+            country:     { minzoom: 0,  maxzoom: 5,  lineWidth: 2,   lineColor: '#333' },
+            regions:     { minzoom: 5,  maxzoom: 7,  lineWidth: 1.5, lineColor: '#333' },
+            departments: { minzoom: 7,  maxzoom: 9,  lineWidth: 1,   lineColor: '#333' },
+            communes:    { minzoom: 9,  maxzoom: 11, lineWidth: 0.5, lineColor: '#666' },
+            iris:        { minzoom: 11, maxzoom: 13, lineWidth: 0.5, lineColor: '#555' }
+        };
+        
+        // Track which layers have been added
+        const layersAdded = {};
+        
+        // Add a GeoJSON level to the map (called when data arrives)
+        function addGeoJSONLevel(level, data) {
+            if (layersAdded[level]) return; // Already added
+            
+            const config = layerConfig[level];
+            const priceField = getPriceField();
+            
+            // Store data and compute scale
+            geoData[level] = data;
+            priceScales[level] = computePriceScale(data.features, priceField, level);
+            console.log(`${level} loaded, scale:`, priceScales[level]);
+            
+            // Add source
+            map.addSource(level, {
+                type: 'geojson',
+                data: data
+            });
+            
+            // Add fill layer
+            map.addLayer({
+                id: `${level}-fill`,
+                type: 'fill',
+                source: level,
+                paint: {
+                    'fill-color': buildFillColor(level),
+                    'fill-opacity': 0.7
+                },
+                minzoom: config.minzoom,
+                maxzoom: config.maxzoom
+            });
+            
+            // Add line layer
+            map.addLayer({
+                id: `${level}-line`,
+                type: 'line',
+                source: level,
+                paint: {
+                    'line-color': config.lineColor,
+                    'line-width': config.lineWidth
+                },
+                minzoom: config.minzoom,
+                maxzoom: config.maxzoom
+            });
+            
+            // Add hover interactions
+            map.on('mousemove', `${level}-fill`, (e) => {
+                map.getCanvas().style.cursor = 'pointer';
+                if (e.features.length > 0) {
+                    updateInfo(e.features[0].properties, level);
+                }
+            });
+            
+            map.on('mouseleave', `${level}-fill`, () => {
+                map.getCanvas().style.cursor = '';
+                resetInfo();
+            });
+            
+            layersAdded[level] = true;
+            
+            // Special handling for communes: update top cities panel
+            if (level === 'communes') {
+                topCitiesData = data.features;
+                updateTopCitiesPanel();
+                showTopCities(true);
+            }
+            
+            // Update legend if this is the current zoom level
+            if (getLevelFromZoom(map.getZoom()) === level) {
+                updateLegend(level);
+            }
+        }
+        
+        // Add PMTiles parcels layer
+        function addParcelsLayer() {
+            if (layersAdded['parcels'] || !pmtilesAvailable) return;
+            
+            try {
+                map.addSource('parcels', {
+                    type: 'vector',
+                    url: `pmtiles://${DATA_BASE_URL}/parcels.pmtiles`
+                });
+                
+                map.addLayer({
+                    id: 'parcels-fill',
+                    type: 'fill',
+                    source: 'parcels',
+                    'source-layer': 'parcels',
+                    paint: {
+                        'fill-color': buildFillColor('parcels'),
+                        'fill-opacity': 0.8
+                    },
+                    minzoom: 13
+                });
+                
+                map.addLayer({
+                    id: 'parcels-line',
+                    type: 'line',
+                    source: 'parcels',
+                    'source-layer': 'parcels',
+                    paint: {
+                        'line-color': '#333',
+                        'line-width': 0.3
+                    },
+                    minzoom: 13
+                });
+                
+                // Add hover for parcels
+                map.on('mousemove', 'parcels-fill', (e) => {
+                    map.getCanvas().style.cursor = 'pointer';
+                    if (e.features.length > 0) {
+                        updateInfo(e.features[0].properties, 'parcels');
+                    }
+                });
+                
+                map.on('mouseleave', 'parcels-fill', () => {
+                    map.getCanvas().style.cursor = '';
+                    resetInfo();
+                });
+                
+                layersAdded['parcels'] = true;
+                console.log('Parcels PMTiles layer added');
+            } catch (e) {
+                console.error('Parcels PMTiles error:', e.message);
+            }
+        }
+        
+        // Add PMTiles layer (communes, iris)
+        function addPMTilesLevel(level) {
+            if (layersAdded[level] || !pmtilesAvailable) return;
+            
+            const config = layerConfig[level];
+            
+            try {
+                map.addSource(level, {
+                    type: 'vector',
+                    url: `pmtiles://${DATA_BASE_URL}/${level}.pmtiles`
+                });
+                
+                map.addLayer({
+                    id: `${level}-fill`,
+                    type: 'fill',
+                    source: level,
+                    'source-layer': level,
+                    paint: {
+                        'fill-color': buildFillColor(level),
+                        'fill-opacity': 0.7
+                    },
+                    minzoom: config.minzoom,
+                    maxzoom: config.maxzoom
+                });
+                
+                map.addLayer({
+                    id: `${level}-line`,
+                    type: 'line',
+                    source: level,
+                    'source-layer': level,
+                    paint: {
+                        'line-color': config.lineColor,
+                        'line-width': config.lineWidth
+                    },
+                    minzoom: config.minzoom,
+                    maxzoom: config.maxzoom
+                });
+                
+                // Add hover
+                map.on('mousemove', `${level}-fill`, (e) => {
+                    map.getCanvas().style.cursor = 'pointer';
+                    if (e.features.length > 0) {
+                        updateInfo(e.features[0].properties, level);
+                    }
+                });
+                
+                map.on('mouseleave', `${level}-fill`, () => {
+                    map.getCanvas().style.cursor = '';
+                    resetInfo();
+                });
+                
+                layersAdded[level] = true;
+                priceScales[level] = [1500, 3125, 4750, 6375, 8000]; // Fixed scale
+                console.log(`${level} PMTiles layer added`);
+            } catch (e) {
+                console.error(`${level} PMTiles error:`, e.message);
+            }
+        }
+        
+        map.on('load', () => {
+            // Load small GeoJSON levels in parallel
+            const geojsonLevels = ['country', 'regions', 'departments'];
+            
+            geojsonLevels.forEach(level => {
+                fetch(`${DATA_BASE_URL}/${level}.geojson`)
+                    .then(r => r.json())
+                    .then(data => addGeoJSONLevel(level, data))
+                    .catch(e => console.error(`Failed to load ${level}:`, e));
+            });
+            
+            // Add PMTiles layers (communes, iris, parcels) - load tiles on-demand
+            addPMTilesLevel('communes');
+            addPMTilesLevel('iris');
+            addParcelsLayer();
+            
+            // Load small pre-computed top cities data (fast!)
+            fetch(`${DATA_BASE_URL}/top_cities.json`)
+                .then(r => r.json())
+                .then(data => {
+                    topCitiesData = data;
+                    updateTopCitiesPanel();
+                    showTopCities(true);
+                    // Collapse by default on mobile
+                    if (window.innerWidth <= 600) {
+                        document.getElementById('top-cities').classList.add('collapsed');
+                    }
+                })
+                .catch(e => console.log('Top cities data not available:', e.message));
+            
+            // Initial legend update
+            updateLegend('country');
+        });
+        
+        // Update zoom display and legend
+        map.on('zoom', () => {
+            const zoom = map.getZoom();
+            document.getElementById('zoom-value').textContent = zoom.toFixed(1);
+            
+            const newLevel = getLevelFromZoom(zoom);
+            if (newLevel !== currentLevel) {
+                currentLevel = newLevel;
+                updateLegend(currentLevel);
+            }
+        });
+        
+        // Property type selector
+        document.getElementById('property-type').addEventListener('change', (e) => {
+            currentPropertyType = e.target.value;
+            updateLayerColors();
+            updateTopCitiesPanel();
+        });
+        
+        // Add navigation controls
+        map.addControl(new maplibregl.NavigationControl());
+    </script>
+</body>
+</html>

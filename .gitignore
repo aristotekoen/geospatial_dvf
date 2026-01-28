@@ -1,0 +1,36 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+#Environment vars
+.env
+
+# Archive folder (old/experimental code)
+archive/
+
+# Data files
+*.csv
+*.parquet
+*.geojson
+*.gz
+*.shp
+*.shx
+*.shx
+*.cpg
+*.gpkg
+*.dbf
+*.prj
+*.pdf
+*xlsx
+*.mbtiles
+*.pmtiles
+*.gz
+*.json
+*.txt
