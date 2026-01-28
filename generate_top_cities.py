@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
 Generate a small JSON file with top cities data for the map.
+Computes true medians from individual transactions (not weighted averages of medians).
 """
 
 import json
@@ -13,9 +14,8 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 # Configuration
-AGGREGATES_DIR = Path("data/aggregates")
+DVF_PATH = Path("data/processed/dvf_processed.parquet")
 OUTPUT_PATH = Path("map/data/top_cities.json")
-TIME_SPAN = "all" 
 
 # Big cities with arrondissements to aggregate
 BIG_CITIES = {
@@ -24,50 +24,71 @@ BIG_CITIES = {
     "Lyon": [f"69{i:03d}" for i in range(381, 390)],  # 69381-69389
 }
 
+# Flatten to a lookup dict: code -> city_name
+ARRONDISSEMENT_TO_CITY = {
+    code: city for city, codes in BIG_CITIES.items() for code in codes
+}
+
 
 def main():
-    logger.info("Generating top cities data from aggregates...")
+    logger.info("Generating top cities data from processed DVF transactions...")
     
-    # Load commune aggregates
-    agg_path = AGGREGATES_DIR / TIME_SPAN / "agg_commune.parquet"
-    if not agg_path.exists():
-        logger.error(f"Aggregates not found at {agg_path}")
+    if not DVF_PATH.exists():
+        logger.error(f"DVF data not found at {DVF_PATH}")
         return 1
     
-    logger.info(f"Loading {agg_path}...")
-    df = pl.read_parquet(agg_path)
-    logger.info(f"Loaded {len(df)} communes")
+    logger.info(f"Loading {DVF_PATH}...")
+    df = pl.read_parquet(DVF_PATH)
+    logger.info(f"Loaded {len(df):,} transactions")
     
-    # Create a city name column (aggregate arrondissements)
-    def get_city_name(code: str, name: str) -> str:
-        for city, codes in BIG_CITIES.items():
-            if code in codes:
-                return city
-        return name
+    # Filter to residential properties only (Maison or Appartement)
+    df = df.filter(pl.col("type_local").is_in(["Maison", "Appartement"]))
+    # Filter out rows with missing prix_m2
+    df = df.filter(pl.col("prix_m2").is_not_null() & (pl.col("prix_m2") > 0))
+    logger.info(f"Filtered to {len(df):,} residential transactions with valid prix_m2")
     
+    # Create city_name column: use parent city for arrondissements, otherwise nom_commune
     df = df.with_columns(
-        pl.struct(["code_commune", "nom_commune"])
-        .map_elements(lambda x: get_city_name(x["code_commune"], x["nom_commune"]), return_dtype=pl.Utf8)
+        pl.when(pl.col("code_commune").is_in(list(ARRONDISSEMENT_TO_CITY.keys())))
+        .then(pl.col("code_commune").replace(ARRONDISSEMENT_TO_CITY))
+        .otherwise(pl.col("nom_commune"))
         .alias("city_name")
     )
     
-    # Aggregate by city name
+    # Compute aggregates per city with true medians
     aggregated = df.group_by("city_name").agg([
-        pl.col("nb_transactions").sum(),
-        pl.col("nb_maisons").sum(),
-        pl.col("nb_appartements").sum(),
-        # Weighted average for prices
-        (pl.col("prix_m2_median") * pl.col("nb_transactions")).sum().alias("prix_weighted"),
-        (pl.col("prix_m2_maison_median") * pl.col("nb_maisons")).sum().alias("prix_maison_weighted"),
-        (pl.col("prix_m2_appart_median") * pl.col("nb_appartements")).sum().alias("prix_appart_weighted"),
-    ]).with_columns([
-        (pl.col("prix_weighted") / pl.col("nb_transactions")).alias("prix_m2_median"),
-        (pl.col("prix_maison_weighted") / pl.col("nb_maisons")).alias("prix_m2_maison_median"),
-        (pl.col("prix_appart_weighted") / pl.col("nb_appartements")).alias("prix_m2_appart_median"),
-    ]).select([
+        pl.len().alias("nb_transactions"),
+        (pl.col("type_local") == "Maison").sum().alias("nb_maisons"),
+        (pl.col("type_local") == "Appartement").sum().alias("nb_appartements"),
+        pl.col("prix_m2").median().alias("prix_m2_median"),
+    ])
+    
+    # Compute median for maisons only
+    maisons_median = (
+        df.filter(pl.col("type_local") == "Maison")
+        .group_by("city_name")
+        .agg(pl.col("prix_m2").median().alias("prix_m2_maison_median"))
+    )
+    
+    # Compute median for appartements only
+    apparts_median = (
+        df.filter(pl.col("type_local") == "Appartement")
+        .group_by("city_name")
+        .agg(pl.col("prix_m2").median().alias("prix_m2_appart_median"))
+    )
+    
+    # Join all together
+    aggregated = (
+        aggregated
+        .join(maisons_median, on="city_name", how="left")
+        .join(apparts_median, on="city_name", how="left")
+    )
+    
+    # Rename and select columns
+    aggregated = aggregated.select([
         pl.col("city_name").alias("name"),
         "nb_transactions",
-        "nb_maisons", 
+        "nb_maisons",
         "nb_appartements",
         "prix_m2_median",
         "prix_m2_maison_median",
