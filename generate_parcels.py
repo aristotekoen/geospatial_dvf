@@ -141,8 +141,9 @@ def generate_parcel_geojson(time_span: str = TIME_SPAN, num_workers: int = NUM_W
     logger.info("Grouping aggregates by department...")
     agg_by_dept = {}
     for dept, group in agg.groupby("code_departement"):
-        # Convert group to dict of dicts using vectorized operations
-        group_dict = group.set_index("id_parcelle_unique").to_dict("index")
+        # Convert group to dict of dicts
+        records = group.to_dict("records")
+        group_dict = {row["id_parcelle_unique"]: row for row in records}
         agg_by_dept[dept] = group_dict
     
     departments_with_data = list(agg_by_dept.keys())

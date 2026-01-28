@@ -350,33 +350,35 @@ def create_sample_dvf_data() -> pl.DataFrame:
 
 def test_sample_data_structure():
     """Test that sample data has correct structure."""
+    # Arrange
     df = create_sample_dvf_data()
+    
+    # Act
+    mutations = df.select("id_mutation").unique()
+    dispositions = df.filter(pl.col("id_mutation") == "2013P00181").select("numero_disposition").unique()
     
     print("\n=== Sample DVF Data ===")
     print(f"Total rows: {len(df)}")
     print(df.select(["id_mutation", "numero_disposition", "id_parcelle", "type_local", "nature_culture", "surface_reelle_bati"]))
     
-    # Check we have expected mutations
-    mutations = df.select("id_mutation").unique()
+    # Assert
     assert len(mutations) == 2, "Should have 2 mutations"
-    
-    # Check mutation 2013P00181 has 2 dispositions
-    disp = df.filter(pl.col("id_mutation") == "2013P00181").select("numero_disposition").unique()
-    assert len(disp) == 2, "Mutation 2013P00181 should have 2 dispositions"
+    assert len(dispositions) == 2, "Mutation 2013P00181 should have 2 dispositions"
 
 
 def test_remove_duplicate_lines_logic():
     """Test the remove_duplicate_lines logic from V2."""
+    # Arrange
     df = create_sample_dvf_data()
+    group_cols = ["id_mutation", "numero_disposition", "id_parcelle", "nature_mutation"]
     
     print("\n=== Before remove_duplicate_lines ===")
     print(f"Total rows: {len(df)}")
-    kt34 = df.filter(pl.col("id_parcelle") == "75001KT34")
-    print(f"Rows for KT34: {len(kt34)}")
-    print(kt34.select(["type_local", "nature_culture", "surface_reelle_bati"]))
+    kt34_before = df.filter(pl.col("id_parcelle") == "75001KT34")
+    print(f"Rows for KT34: {len(kt34_before)}")
+    print(kt34_before.select(["type_local", "nature_culture", "surface_reelle_bati"]))
     
-    # Apply remove_duplicate_lines logic
-    group_cols = ["id_mutation", "numero_disposition", "id_parcelle", "nature_mutation"]
+    # Act
     first_culture = df.group_by(group_cols).agg(
         pl.col("nature_culture").first().alias("first_nature_culture")
     )
@@ -390,16 +392,18 @@ def test_remove_duplicate_lines_logic():
     print(f"Rows for KT34: {len(kt34)}")
     print(kt34.select(["type_local", "nature_culture", "surface_reelle_bati"]))
     
+    # Assert
     # Should have 3 rows for KT34: 1 Dépendance + 1 Maison + 1 Appartement (all with first nature_culture)
     assert len(kt34) == 3, f"KT34 should have 3 rows after dedup, got {len(kt34)}"
 
 
 def test_filter_maison_appartement():
     """Test filtering to keep only Maison/Appartement."""
+    # Arrange
     df = create_sample_dvf_data()
+    group_cols = ["id_mutation", "numero_disposition", "id_parcelle", "nature_mutation"]
     
     # Apply remove_duplicate_lines first
-    group_cols = ["id_mutation", "numero_disposition", "id_parcelle", "nature_mutation"]
     first_culture = df.group_by(group_cols).agg(
         pl.col("nature_culture").first().alias("first_nature_culture")
     )
@@ -407,13 +411,14 @@ def test_filter_maison_appartement():
     df_dedup = df_dedup.filter(pl.col("nature_culture") == pl.col("first_nature_culture"))
     df_dedup = df_dedup.drop("first_nature_culture")
     
-    # Filter Maison/Appartement
+    # Act
     df_filtered = df_dedup.filter(pl.col("type_local").is_in(["Maison", "Appartement"]))
     
     print("\n=== After filtering Maison/Appartement ===")
     print(f"Total rows: {len(df_filtered)}")
     print(df_filtered.select(["id_mutation", "numero_disposition", "type_local", "surface_reelle_bati"]))
     
+    # Assert
     # Expected: 
     # - Mutation 2013P00181: 1 Appartement (disp 2) + 1 Maison + 1 Appartement (disp 3)
     # - Mutation 2013P00182: 1 Appartement (disp 1)
@@ -422,10 +427,11 @@ def test_filter_maison_appartement():
 
 def test_surface_calculation():
     """Test that surface_batie_totale is calculated correctly."""
+    # Arrange
     df = create_sample_dvf_data()
+    group_cols = ["id_mutation", "numero_disposition", "id_parcelle", "nature_mutation"]
     
     # Apply full pipeline
-    group_cols = ["id_mutation", "numero_disposition", "id_parcelle", "nature_mutation"]
     first_culture = df.group_by(group_cols).agg(
         pl.col("nature_culture").first().alias("first_nature_culture")
     )
@@ -436,7 +442,7 @@ def test_surface_calculation():
     # Filter Maison/Appartement
     df_filtered = df_dedup.filter(pl.col("type_local").is_in(["Maison", "Appartement"]))
     
-    # Compute surface totals
+    # Act
     surface_totals = df_filtered.group_by(["id_mutation", "numero_disposition"]).agg(
         pl.col("surface_reelle_bati").sum().alias("surface_batie_totale"),
         pl.col("valeur_fonciere").first().alias("prix"),
@@ -448,32 +454,30 @@ def test_surface_calculation():
     print("\n=== Surface and Price Calculation ===")
     print(surface_totals)
     
-    # Check disposition 2 (Appartement 75m², 180k€)
     disp2 = surface_totals.filter(
         (pl.col("id_mutation") == "2013P00181") & 
         (pl.col("numero_disposition") == 2)
     )
-    assert disp2["surface_batie_totale"][0] == 75.0, "Disposition 2 should have 75m²"
-    assert abs(disp2["prix_m2"][0] - 2400.0) < 0.01, "Disposition 2 should be 2400 €/m²"
-    
-    # Check disposition 3 (Maison 120m² + Appartement 55m² = 175m², 317k€)
     disp3 = surface_totals.filter(
         (pl.col("id_mutation") == "2013P00181") & 
         (pl.col("numero_disposition") == 3)
     )
+    expected_prix_m2_disp3 = 317000.0 / 175.0  # ~1811.43
+    
+    # Assert
+    assert disp2["surface_batie_totale"][0] == 75.0, "Disposition 2 should have 75m²"
+    assert abs(disp2["prix_m2"][0] - 2400.0) < 0.01, "Disposition 2 should be 2400 €/m²"
     assert disp3["surface_batie_totale"][0] == 175.0, f"Disposition 3 should have 175m² (120+55), got {disp3['surface_batie_totale'][0]}"
-    expected_prix_m2 = 317000.0 / 175.0  # ~1811.43
-    assert abs(disp3["prix_m2"][0] - expected_prix_m2) < 0.01, f"Disposition 3 should be {expected_prix_m2:.2f} €/m²"
+    assert abs(disp3["prix_m2"][0] - expected_prix_m2_disp3) < 0.01, f"Disposition 3 should be {expected_prix_m2_disp3:.2f} €/m²"
     
     print("\n✅ All surface and price calculations are correct!")
 
 
 def test_with_final_functions():
     """Test using actual final version functions on sample data saved to temp CSV."""
-    # Create temp CSV with sample data
+    # Arrange
     df = create_sample_dvf_data()
     
-    # Print all rows of sample data
     with pl.Config(tbl_rows=-1):  # Show all rows
         print("\n=== Full Sample DVF Data (12 rows) ===")
         print(df.select(["id_mutation", "numero_disposition", "id_parcelle", "type_local", "nature_culture", "surface_reelle_bati"]))
@@ -483,7 +487,6 @@ def test_with_final_functions():
         df.write_csv(temp_path)
     
     try:
-        # Import final version functions
         import sys
         sys.path.insert(0, str(Path(__file__).parent.parent))
         
@@ -496,12 +499,11 @@ def test_with_final_functions():
             reduce_data,
         )
         
-        # Load as lazy frame (simulating aggregate_dvf)
+        # Act
         df_lazy = pl.scan_csv(temp_path).with_columns([
             pl.col("date_mutation").str.to_date("%Y-%m-%d"),
         ])
         
-        # Apply final pipeline steps (in correct order matching aggregate_dvf)
         df_lazy = fill_nature_culture_nulls(df_lazy)
         df_lazy = remove_duplicate_lines(df_lazy)
         df_lazy = add_dependency(df_lazy)
@@ -515,14 +517,13 @@ def test_with_final_functions():
         print(f"Total aggregated transactions: {len(result)}")
         print(result.select(["id_mutation", "numero_disposition", "type_local", "surface_batie_totale", "valeur_fonciere"]))
         
-        # Verify we have 3 transactions
-        assert len(result) == 3, f"Should have 3 aggregated transactions, got {len(result)}"
-        
-        # Verify surface for disposition 3 is 175m² (Maison 120 + Appartement 55, not inflated from duplicates)
         disp3 = result.filter(
             (pl.col("id_mutation") == "2013P00181") & 
             (pl.col("numero_disposition") == 3)
         )
+        
+        # Assert
+        assert len(result) == 3, f"Should have 3 aggregated transactions, got {len(result)}"
         assert disp3["surface_batie_totale"][0] == 175.0, f"Final: Disposition 3 should have 175m² (120+55), got {disp3['surface_batie_totale'][0]}"
         
         print("\n✅ Final pipeline produces correct results!")
