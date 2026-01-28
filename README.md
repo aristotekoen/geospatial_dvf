@@ -2,7 +2,7 @@
 
 **Live Demo:** [https://pub-52ee07814bfa467bad60b77c80d53dd3.r2.dev/index.html](https://pub-52ee07814bfa467bad60b77c80d53dd3.r2.dev/index.html)
 
-![alt text](image.png) 
+![Map Preview](images/image.png) 
 
 An interactive map visualizing real estate price estimates from the French DVF (Demandes de Valeurs Foncières) database, covering transactions from 2020 to June 2025. The map displays median price per square meter aggregated at six geographic levels, with property type filtering (All, Apartments, Houses).
 
@@ -411,14 +411,15 @@ We can see this clearly when looking at some statistics (computed for a previous
 
 Describe of price, price per sqm, log of price per sqm, total surface over the three departments shows abnormal max and min values.
 
-![alt text](<Untitled 4.png>)
+![Descriptive statistics showing outliers](images/outliers_describe.png)
 
 Heavily compressed boxplots of the log price per square meter for each of the three departments. 
 
-![alt text](<Untitled 5.png>)
+![Boxplots of log price per sqm](images/outliers_boxplot.png)
 
 Very long tailed distributions of the log of the price per sqm. 
-![alt text](<Untitled 10.png>)
+
+![Distribution of log price per sqm](images/outliers_distribution.png)
 
 That is why we need to manage these outliers and we do this in a two step process:
 
