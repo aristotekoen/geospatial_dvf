@@ -650,10 +650,10 @@ def main():
 
     logger.info("\nPrice per m² statistics for France adjusted:")
     logger.info(df.select([
-        pl.col("prix_m2_adjusted").mean().alias("mean"),
-        pl.col("prix_m2_adjusted").median().alias("median"),
-        pl.col("prix_m2_adjusted").min().alias("min"),
-        pl.col("prix_m2_adjusted").max().alias("max"),
+        pl.col("prix_m2_ajuste").mean().alias("mean"),
+        pl.col("prix_m2_ajuste").median().alias("median"),
+        pl.col("prix_m2_ajuste").min().alias("min"),
+        pl.col("prix_m2_ajuste").max().alias("max"),
     ]))
 
 
